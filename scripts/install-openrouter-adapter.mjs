@@ -94,4 +94,21 @@ if (reg.includes("openrouterAdapter")) {
   write(regPath, reg);
 }
 
+// ── 3. Make the adapters list report openrouter as "external" ───────────────
+// The UI only auto-registers adapters whose /adapters entry has
+// source === "external" (via syncExternalAdapters). A server-registered
+// adapter that is not in BUILTIN_ADAPTER_TYPES is, semantically, external —
+// so classify it that way. Real built-ins stay "builtin".
+const routePath = path.join(root, "server/src/routes/adapters.ts");
+let route = read(routePath);
+const sourceAnchor = `    source: externalRecord ? "external" : "builtin",`;
+const sourcePatched = `    source: (externalRecord || !BUILTIN_ADAPTER_TYPES.has(adapter.type)) ? "external" : "builtin",`;
+if (route.includes(sourcePatched)) {
+  console.log("[install-openrouter] adapters route already patched");
+} else {
+  if (!route.includes(sourceAnchor)) fail("source anchor not found in routes/adapters.ts");
+  route = route.replace(sourceAnchor, sourcePatched);
+  write(routePath, route);
+}
+
 console.log("[install-openrouter] done.");
