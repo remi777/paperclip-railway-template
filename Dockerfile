@@ -13,7 +13,15 @@ ARG PAPERCLIP_REF=v2026.416.0
 
 WORKDIR /paperclip
 RUN git clone --depth 1 --branch "${PAPERCLIP_REF}" "${PAPERCLIP_REPO}" .
-RUN pnpm install --frozen-lockfile
+
+# Vendor the OpenRouter adapter into the workspace and wire it into the
+# server adapter registry, then let pnpm relink the workspace (the new
+# workspace package changes the lockfile, so frozen-lockfile is dropped).
+COPY openrouter-adapter/ /paperclip/packages/adapters/openrouter/
+COPY scripts/install-openrouter-adapter.mjs /tmp/install-openrouter-adapter.mjs
+RUN node /tmp/install-openrouter-adapter.mjs /paperclip
+
+RUN pnpm install --no-frozen-lockfile
 RUN pnpm --filter @paperclipai/ui build
 RUN pnpm --filter @paperclipai/plugin-sdk build
 RUN pnpm --filter @paperclipai/server build
