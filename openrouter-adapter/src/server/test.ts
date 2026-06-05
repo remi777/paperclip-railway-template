@@ -70,20 +70,35 @@ export async function testEnvironment(
   };
 }
 
-// Optional live model discovery used by listModels in the registry entry.
+// Live model discovery used by listModels in the registry entry.
+// OpenRouter's /models endpoint is public — no API key is required — so this
+// returns the full catalogue (300+ models) even before a key is configured.
+// A key is sent when available (lets OpenRouter scope/personalize the list).
 export async function listOpenRouterModels(apiKey?: string): Promise<AdapterModel[]> {
   const key = apiKey || process.env.OPENROUTER_API_KEY || "";
-  if (!key) return [];
   try {
-    const res = await fetch(OPENROUTER_MODELS_ENDPOINT, {
-      headers: { Authorization: `Bearer ${key}` },
-    });
+    const headers: Record<string, string> = {};
+    if (key) headers.Authorization = `Bearer ${key}`;
+    const res = await fetch(OPENROUTER_MODELS_ENDPOINT, { headers });
     if (!res.ok) return [];
-    const data = (await res.json()) as { data?: Array<{ id?: string; name?: string }> };
+    const data = (await res.json()) as {
+      data?: Array<{ id?: string; name?: string; pricing?: { prompt?: string; completion?: string } }>;
+    };
     if (!Array.isArray(data.data)) return [];
+
+    const isFree = (m: { id?: string; pricing?: { prompt?: string; completion?: string } }) =>
+      (m.id ?? "").endsWith(":free") ||
+      (m.pricing?.prompt === "0" && m.pricing?.completion === "0");
+
     return data.data
-      .filter((m): m is { id: string; name?: string } => typeof m.id === "string")
-      .map((m) => ({ id: m.id, label: m.name ?? m.id }));
+      .filter((m): m is { id: string; name?: string; pricing?: { prompt?: string; completion?: string } } =>
+        typeof m.id === "string",
+      )
+      .map((m) => ({
+        id: m.id,
+        label: `${m.name ?? m.id}${isFree(m) ? " (free)" : ""}`,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   } catch {
     return [];
   }
